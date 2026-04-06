@@ -378,23 +378,24 @@ Execute the commands sequentially to validate full API functionality.
 ---
 
 🏗️ High-Level Architecture
+📐 Architecture Style
 
-Layered architecture:
+The application follows a layered architecture:
 
-Controller → Service → Repository → DB
-
-Database:
-
-File-backed H2 database (persists across restarts)
+Controller → Service → Repository → Database
+💾 Database
+Uses file-backed H2 database
+Data persists across application restarts
+Suitable for development and lightweight deployments
 🔁 Asynchronous Processing Pipeline
 
-Instead of in-memory events, system uses DB-backed outbox pattern:
+Instead of using in-memory events, the system adopts a DB-backed for reliability and multi-node support.
 
-Flow:
-API writes to async_events table
-Scheduler A → expands into notifications
-Scheduler B → processes notifications
-🔷 Architecture Diagram (Logical)
+🔄 Flow
+API writes events to async_events table
+Scheduler A processes events → expands into notifications
+Scheduler B processes notifications → logs/sends
+🧭 Architecture Overview
 Client API
    ↓
 Books / Users / Wishlist APIs
@@ -409,89 +410,104 @@ H2 Database
 Schedulers:
    → AsyncEvent Processor
    → Notification Dispatcher
-3. 🧩 Main Components
+🧩 Main Components
 Layer	Responsibility
 Controllers (/api/books, /api/users, /api/wishlist)	Handle HTTP requests, validation, pagination
-BookService	CRUD, filtering, search, soft delete, ISBN validation, event enqueue
-AsyncEventEnqueueService	Writes event to async_events (non-blocking)
-AsyncEventProcessorService	Reads events, expands into notifications (fan-out)
-WishlistNotificationWriterService	Batch inserts notifications using REQUIRES_NEW
+BookService	CRUD operations, filtering, search, soft delete, ISBN validation, event enqueue
+AsyncEventEnqueueService	Writes events to async_events (non-blocking)
+AsyncEventProcessorService	Reads events and performs wishlist fan-out
+WishlistNotificationWriterService	Batch inserts notifications using REQUIRES_NEW transactions
 NotificationDispatchService	Processes notifications (log/send)
-Schedulers	Run cron jobs for async stages
-Global Exception Handler	Standard error handling (400, 404, 409)
-4. 🗄️ Data Model (Conceptual)
-📘 books
-id, title, author, isbn, published_year
+Schedulers	Runs cron jobs for async processing stages
+Global Exception Handler	Handles errors (400, 404, 409, etc.)
+🗄️ Data Model (Conceptual)
+📘 Books
+id
+title
+author
+isbn
+published_year
 availability_status
 deleted (soft delete flag)
-👤 users
-id, name (minimal identity)
-❤️ wishlist_entries
+👤 Users
+id
+name
+❤️ Wishlist Entries
 user_id
 book_id
-⚠️ No JPA relations → scalar FKs (performance-friendly)
-📤 async_events (Outbox Table)
+
+⚠️ Uses scalar foreign keys (no JPA relationships) for performance
+
+📤 Async Events (Outbox)
 id
 book_id
 availability_status
 status (PENDING → PROCESSED)
-🔔 notifications
+🔔 Notifications
 id
 user_id
 book_id
 book_title (snapshot)
-type (WISHLIST)
+type (e.g., WISHLIST)
 status (PENDING → PROCESSED)
-5. 🔄 Critical Flows
-5.1 📗 Book Return → Notification Flow
+🔄 Critical Flows
+📗 1. Book Return → Notification Flow
 
-Client updates:
+Client updates book status:
 
 BORROWED → AVAILABLE
 Transaction commits
 Event inserted into async_events
 Scheduler A:
-Picks events (SKIP LOCKED)
+Picks events using SKIP LOCKED
 Validates book state
 Fetches wishlist users
 Creates notification entries
 Scheduler B:
 Processes notifications
-Logs / sends
+Logs or sends notifications
 Marks as PROCESSED
-5.2 🗑️ Soft Delete Flow
+🗑️ 2. Soft Delete Flow
 DELETE /api/books/{id} → sets deleted = true
-Hidden from queries (not physically removed)
-
-Restore via:
-
+Book is hidden from queries (not physically removed)
+Restore:
 POST /api/books/{id}/restore
 
-📌 ISBN uniqueness still enforced (even if soft deleted)
+📌 ISBN uniqueness is still enforced even for soft-deleted records
 
-5.3 🔍 Search & Listing
-List API
-Filters: author (partial), publishedYear
+🔍 3. Search & Listing
+📄 List API
+Filters:
+Author (partial match)
+Published year
 Uses JPA Specifications
-Excludes deleted records
-Search API
-Uses JPQL LIKE
-Searches title + author
-6. ⚙️ Multi-Instance & Concurrency Design
-Key Techniques:
+Excludes soft-deleted records
+🔎 Search API
+Uses JPQL LIKE queries
+Searches:
+Title
+Author
+⚙️ Multi-Instance & Concurrency Design
 ✅ SKIP LOCKED
+
 Used in:
+
 async_events
 notifications
-Ensures:
-No duplicate processing across nodes
-Safe parallel schedulers
-✅ Outbox Pattern
-Ensures reliability
-Avoids:
-ApplicationEventPublisher limitations
-In-memory event loss across nodes
+
+Benefits:
+
+Prevents duplicate processing
+Enables safe parallel schedulers across multiple instances
+
+
 ✅ Parallel Fan-out
-Uses thread pool
-Batch processing
-REQUIRES_NEW transactions per batch
+Uses thread pool for batch processing
+Each batch runs in REQUIRES_NEW transaction
+
+
+⭐ Key Design Highlights
+Event-driven architecture using Async Events and cron jobs
+Scalable across multiple nodes
+Supports eventual consistency
+Designed for future migration to Kafka / message queues instead of Async Events
