@@ -378,24 +378,24 @@ Execute the commands sequentially to validate full API functionality.
 ---
 
 🏗️ High-Level Architecture
-📐 Architecture Style
+### 📐 Architecture Style
 
-The application follows a layered architecture:
+#### The application follows a layered architecture:
 
-Controller → Service → Repository → Database
-💾 Database
-Uses file-backed H2 database
-Data persists across application restarts
-Suitable for development and lightweight deployments
-🔁 Asynchronous Processing Pipeline
+#### Controller → Service → Repository → Database
+ - 💾 Database
+ - Uses file-backed H2 database
+ - Data persists across application restarts
+ - Suitable for development and lightweight deployments
+#### 🔁 Asynchronous Processing Pipeline
 
-Instead of using in-memory events, the system adopts a DB-backed for reliability and multi-node support.
+#### Instead of using in-memory events, the system adopts a DB-backed for reliability and multi-node support.
 
-🔄 Flow
-API writes events to async_events table
-Scheduler A processes events → expands into notifications
-Scheduler B processes notifications → logs/sends
-🧭 Architecture Overview
+#### 🔄 Flow
+ - API writes events to async_events table
+ - Scheduler A processes events → expands into notifications
+ - Scheduler B processes notifications → logs/sends
+#### 🧭 Architecture Overview
 Client API
    ↓
 Books / Users / Wishlist APIs
@@ -407,94 +407,95 @@ H2 Database
    ├── async_events   (Outbox)
    └── notifications  (Queue)
 
-Schedulers:
+#### Schedulers:
    → AsyncEvent Processor
    → Notification Dispatcher
-🧩 Main Components
-Layer	Responsibility
-Controllers (/api/books, /api/users, /api/wishlist)	Handle HTTP requests, validation, pagination
-BookService	CRUD operations, filtering, search, soft delete, ISBN validation, event enqueue
-AsyncEventEnqueueService	Writes events to async_events (non-blocking)
-AsyncEventProcessorService	Reads events and performs wishlist fan-out
-WishlistNotificationWriterService	Batch inserts notifications using REQUIRES_NEW transactions
-NotificationDispatchService	Processes notifications (log/send)
-Schedulers	Runs cron jobs for async processing stages
-Global Exception Handler	Handles errors (400, 404, 409, etc.)
+#### 🧩 Main Components
+#### Layer	Responsibility
+ -  Controllers (/api/books, /api/users, /api/wishlist)	Handle HTTP requests, validation, pagination
+ - BookService	CRUD operations, filtering, search, soft delete, ISBN validation, event enqueue
+ - AsyncEventEnqueueService	Writes events to async_events (non-blocking)
+ - AsyncEventProcessorService	Reads events and performs wishlist fan-out
+ - WishlistNotificationWriterService	Batch inserts notifications using REQUIRES_NEW transactions
+ - NotificationDispatchService	Processes notifications (log/send)
+ - Schedulers	Runs cron jobs for async processing stages
+ - Global Exception Handler	Handles errors (400, 404, 409, etc.)
 
-🗄️ Data Model (Conceptual)
+### 🗄️ Data Model (Conceptual)
 
-📘 Books
-id
-title
-author
-isbn
-published_year
-availability_status
-deleted (soft delete flag)
+#### 📘 Books
+ - id
+ - title
+ - author
+ - isbn
+ - published_year
+ - availability_status
+ - deleted (soft delete flag)
 
-👤 Users
-id
-name
+#### 👤 Users
+ - id
+ - name
 
-❤️ Wishlist Entries
-user_id
-book_id
+#### ❤️ Wishlist Entries
+ - user_id
+ - book_id
 
 
-📤 Async Events (Outbox)
-id
-book_id
-availability_status
-status (PENDING → PROCESSED)
-🔔 Notifications
-id
-user_id
-book_id
-book_title (snapshot)
-type (e.g., WISHLIST)
-status (PENDING → PROCESSED)
+#### 📤 Async Events (Outbox)
+ - id
+ - book_id
+ - availability_status
+ - status (PENDING → PROCESSED)
 
-🔄 Critical Flows
-📗 1. Book Return → Notification Flow
+#### 🔔 Notifications
+ - id
+ - user_id
+ - book_id
+ - book_title (snapshot)
+ - type (e.g., WISHLIST)
+ - status (PENDING → PROCESSED)
 
-Client updates book status:
+## 🔄 Critical Flows
+### 📗 1. Book Return → Notification Flow
 
-BORROWED → AVAILABLE
-Transaction commits
-Event inserted into async_events
-Scheduler A:
-Picks events using SKIP LOCKED
-Validates book state
-Fetches wishlist users
-Creates notification entries
-Scheduler B:
-Processes notifications
-Logs or sends notifications
-Marks as PROCESSED
-🗑️ 2. Soft Delete Flow
-DELETE /api/books/{id} → sets deleted = true
-Book is hidden from queries (not physically removed)
-Restore:
-POST /api/books/{id}/restore
+#### Client updates book status:
 
-📌 ISBN uniqueness is still enforced even for soft-deleted records
+ - BORROWED → AVAILABLE
+#### Transaction commits
+ - Event inserted into async_events
+#### Scheduler A:
+ - Picks events using SKIP LOCKED
+ - Validates book state
+ - Fetches wishlist users
+ - Creates notification entries
+#### Scheduler B:
+ - Processes notifications
+ - Logs or sends notifications
+ - Marks as PROCESSED
+### 🗑️ 2. Soft Delete Flow
+ - DELETE /api/books/{id} → sets deleted = true
+ - Book is hidden from queries (not physically removed)
+#### Restore:
+ - POST /api/books/{id}/restore
 
-🔍 3. Search & Listing
-📄 List API
-Filters:
-Author (partial match)
-Published year
-Uses JPA Specifications
-Excludes soft-deleted records
-🔎 Search API
-Uses JPQL LIKE queries
-Searches:
-Title
-Author
-⚙️ Multi-Instance & Concurrency Design
+#### 📌 ISBN uniqueness is still enforced even for soft-deleted records
+
+### 🔍 3. Search & Listing
+#### 📄 List API
+#### Filters:
+ - Author (partial match)
+ - Published year
+ - Uses JPA Specifications
+ - Excludes soft-deleted records
+#### 🔎 Search API
+ - Uses JPQL LIKE queries
+ - Searches:
+ - Title
+ - Author
+#### ⚙️ Multi-Instance & Concurrency Design
 ✅ SKIP LOCKED
 
-Used in:
+#### Used in:
 
 async_events
 notifications
@@ -510,7 +511,7 @@ Uses thread pool for batch processing
 Each batch runs in REQUIRES_NEW transaction
 
 
-⭐ Key Design Highlights
+#### ⭐ Key Design Highlights
 Event-driven architecture using Async Events and cron jobs
 Scalable across multiple nodes
 Supports eventual consistency
