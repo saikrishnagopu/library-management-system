@@ -420,7 +420,9 @@ WishlistNotificationWriterService	Batch inserts notifications using REQUIRES_NEW
 NotificationDispatchService	Processes notifications (log/send)
 Schedulers	Runs cron jobs for async processing stages
 Global Exception Handler	Handles errors (400, 404, 409, etc.)
+
 🗄️ Data Model (Conceptual)
+
 📘 Books
 id
 title
@@ -429,14 +431,15 @@ isbn
 published_year
 availability_status
 deleted (soft delete flag)
+
 👤 Users
 id
 name
+
 ❤️ Wishlist Entries
 user_id
 book_id
 
-⚠️ Uses scalar foreign keys (no JPA relationships) for performance
 
 📤 Async Events (Outbox)
 id
@@ -450,6 +453,7 @@ book_id
 book_title (snapshot)
 type (e.g., WISHLIST)
 status (PENDING → PROCESSED)
+
 🔄 Critical Flows
 📗 1. Book Return → Notification Flow
 
