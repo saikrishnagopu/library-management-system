@@ -1,9 +1,5 @@
 🏗️ High-Level Architecture
 
-Architecture Style:
-
-Monolithic Spring Boot 3 application
-
 Layered architecture:
 
 Controller → Service → Repository → DB
